@@ -137,6 +137,14 @@ import {
   createOnboardingPrompt,
   createOnboardingRunId,
 } from "./lib/onboarding-prompt.js";
+import { normalizeDisplayValue } from "./shared/display/display-value.js";
+import type { DisplayValue } from "./shared/display/types.js";
+import type {
+  ThreadDebuggerEvent,
+  ThreadDebuggerMessage,
+  ThreadDebuggerMetadata,
+  ThreadDebuggerProvider,
+} from "./shared/thread-debugger/types.js";
 import type {
   ExampleKind,
   ExampleTourStep,
@@ -159,6 +167,14 @@ import type {
 } from "./lib/telemetry.js";
 
 export type { Anchor } from "./lib/types.js";
+export type {
+  ThreadDebuggerEvent,
+  ThreadDebuggerMessage,
+  ThreadDebuggerMetadata,
+  ThreadDebuggerProvider,
+  ThreadDebuggerProviderLoadOptions,
+  ThreadDebuggerToolCall,
+} from "./shared/thread-debugger/types.js";
 export { buildCapabilityRows as ɵbuildCapabilityRows };
 export type { CapabilityToolRow as ɵCapabilityToolRow };
 
@@ -932,13 +948,7 @@ const AGENT_EVENT_TYPES: readonly InspectorAgentEventType[] = [
   "ACTIVITY_DELTA",
 ] as const;
 
-type SanitizedValue =
-  | string
-  | number
-  | boolean
-  | null
-  | SanitizedValue[]
-  | { [key: string]: SanitizedValue };
+type SanitizedValue = DisplayValue;
 
 type InspectorToolCall = {
   id?: string;
@@ -1052,63 +1062,6 @@ type InspectorEvent = {
 };
 
 // ─── Thread details types ────────────────────────────────────────────────────
-
-export type ThreadDebuggerProviderLoadOptions = {
-  signal: AbortSignal;
-};
-
-export type ThreadDebuggerToolCall = {
-  id: string;
-  name: string;
-  args: string | Record<string, unknown>;
-};
-
-export type ThreadDebuggerMessage = {
-  id: string;
-  role: string;
-  content?: string;
-  toolCalls?: ThreadDebuggerToolCall[];
-  toolCallId?: string;
-  /** Present when role === "activity" (Generative UI output). */
-  activityType?: string;
-};
-
-export type ThreadDebuggerEvent = {
-  type: string;
-  timestamp: string | number;
-  payload?: Record<string, unknown>;
-  [key: string]: unknown;
-};
-
-export type ThreadDebuggerMetadata = {
-  id: string;
-  name?: string | null;
-  agentId?: string | null;
-  endUserId?: string | null;
-  createdById?: string | null;
-  status?: string | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-};
-
-export type ThreadDebuggerProvider = {
-  getThreadMetadata?: (
-    threadId: string,
-    options: ThreadDebuggerProviderLoadOptions,
-  ) => Promise<ThreadDebuggerMetadata | null>;
-  getMessages?: (
-    threadId: string,
-    options: ThreadDebuggerProviderLoadOptions,
-  ) => Promise<ThreadDebuggerMessage[]>;
-  getEvents?: (
-    threadId: string,
-    options: ThreadDebuggerProviderLoadOptions,
-  ) => Promise<ThreadDebuggerEvent[]>;
-  getState?: (
-    threadId: string,
-    options: ThreadDebuggerProviderLoadOptions,
-  ) => Promise<Record<string, unknown> | null>;
-};
 
 interface ConversationUser {
   id: string;
@@ -8104,7 +8057,7 @@ export class WebInspectorElement extends LitElement {
       if (state === undefined || state === null) {
         this.agentStates.delete(agent.agentId);
       } else {
-        this.agentStates.set(agent.agentId, this.sanitizeForLogging(state));
+        this.agentStates.set(agent.agentId, normalizeDisplayValue(state));
       }
 
       this.requestUpdate();
@@ -14830,70 +14783,6 @@ export class WebInspectorElement extends LitElement {
       .join(" ");
   }
 
-  private sanitizeForLogging(
-    value: unknown,
-    depth = 0,
-    seen = new WeakSet<object>(),
-  ): SanitizedValue {
-    if (value === undefined) {
-      return "[undefined]";
-    }
-
-    if (
-      value === null ||
-      typeof value === "number" ||
-      typeof value === "boolean"
-    ) {
-      return value;
-    }
-
-    if (typeof value === "string") {
-      return value;
-    }
-
-    if (
-      typeof value === "bigint" ||
-      typeof value === "symbol" ||
-      typeof value === "function"
-    ) {
-      return String(value);
-    }
-
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-
-    if (Array.isArray(value)) {
-      if (depth >= 4) {
-        return "[Truncated depth]" as SanitizedValue;
-      }
-      return value.map((item) =>
-        this.sanitizeForLogging(item, depth + 1, seen),
-      );
-    }
-
-    if (typeof value === "object") {
-      if (seen.has(value as object)) {
-        return "[Circular]" as SanitizedValue;
-      }
-      seen.add(value as object);
-
-      if (depth >= 4) {
-        return "[Truncated depth]" as SanitizedValue;
-      }
-
-      const result: Record<string, SanitizedValue> = {};
-      for (const [key, entry] of Object.entries(
-        value as Record<string, unknown>,
-      )) {
-        result[key] = this.sanitizeForLogging(entry, depth + 1, seen);
-      }
-      return result;
-    }
-
-    return String(value);
-  }
-
   private normalizeEventPayload(
     _type: InspectorAgentEventType,
     payload: unknown,
@@ -14902,10 +14791,10 @@ export class WebInspectorElement extends LitElement {
       const { event, ...rest } = payload as Record<string, unknown>;
       const cleaned =
         Object.keys(rest).length === 0 ? event : { event, ...rest };
-      return this.sanitizeForLogging(cleaned);
+      return normalizeDisplayValue(cleaned);
     }
 
-    return this.sanitizeForLogging(payload);
+    return normalizeDisplayValue(payload);
   }
 
   private normalizeMessageContent(content: unknown): string {
@@ -14918,7 +14807,7 @@ export class WebInspectorElement extends LitElement {
 
     if (typeof content === "object") {
       try {
-        return JSON.stringify(this.sanitizeForLogging(content));
+        return JSON.stringify(normalizeDisplayValue(content));
       } catch {
         return "";
       }
@@ -14960,7 +14849,7 @@ export class WebInspectorElement extends LitElement {
         if (functionName) {
           normalized.function = {
             name: functionName,
-            arguments: this.sanitizeForLogging(args),
+            arguments: normalizeDisplayValue(args),
           };
         }
 
@@ -14985,7 +14874,7 @@ export class WebInspectorElement extends LitElement {
       contentText,
       contentRaw:
         raw.content !== undefined
-          ? this.sanitizeForLogging(raw.content)
+          ? normalizeDisplayValue(raw.content)
           : undefined,
       toolCalls,
       toolCallId:
