@@ -4,14 +4,12 @@ import type { MockInstance } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 
+import { TELEMETRY_EVENTS, TELEMETRY_INGEST_URL, track } from "./transport.js";
 import {
   TELEMETRY_DOCS_URL,
-  TELEMETRY_EVENTS,
-  TELEMETRY_INGEST_URL,
   getRuntimeUrlType,
   getTelemetryDistinctIdForUrl,
   maybeShowDisclosure,
-  track,
   trackHomeFeaturePromptClicked,
   trackInspectorOpened,
   trackTalkToEngineerClicked,
@@ -25,7 +23,7 @@ import {
   trackWhatsNewClicked,
   trackWhatsNewSignalViewed,
   trackWhatsNewViewed,
-} from "../telemetry.js";
+} from "./privacy.js";
 import {
   _resetTelemetryPersistenceForTesting,
   getOrCreateTelemetryDistinctId,
@@ -33,7 +31,7 @@ import {
   isTelemetryOptedOut,
   markTelemetryDisclosureShown,
   setTelemetryOptOut,
-} from "../persistence.js";
+} from "../persistence/telemetry.js";
 
 // The wrapper short-circuits before any network call when opted out, but
 // for the network-touching cases we mock fetch globally so we can read

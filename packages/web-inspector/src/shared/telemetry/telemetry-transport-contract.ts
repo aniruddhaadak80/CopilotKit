@@ -7,11 +7,11 @@ import {
   trackThreadsIntelligenceSignupClicked,
   trackWhatsNewClicked,
   trackWhatsNewViewed,
-} from "../telemetry.js";
+} from "./privacy.js";
 import {
   _resetTelemetryPersistenceForTesting,
   setTelemetryOptOut,
-} from "../persistence.js";
+} from "../persistence/telemetry.js";
 
 const PERSISTED_BROWSER_ID = "11111111-1111-4111-8111-111111111111";
 const FIXED_TELEMETRY_TIME_MS = Date.parse("2026-07-11T12:34:56.000Z");

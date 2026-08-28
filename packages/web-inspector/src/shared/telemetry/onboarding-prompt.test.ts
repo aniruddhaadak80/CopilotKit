@@ -3,7 +3,7 @@ import {
   ONBOARDING_PROMPT_TEMPLATE,
   createOnboardingPrompt,
   createOnboardingRunId,
-} from "../onboarding-prompt.js";
+} from "../../shell/window/onboarding-prompt.js";
 
 describe("onboarding-prompt", () => {
   afterEach(() => {
